@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YouthQuest AI</title>
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--ink:#14162b;--mut:#62667f;--line:#e4e6ef;--pri:#4f46e5;--pri2:#7c3aed;--ok:#059669;--warn:#d97706;--bad:#dc2626;--chip:#eef0ff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1020;--card:#171a2e;--ink:#eceefe;--mut:#9aa0c0;--line:#2a2e4a;--chip:#232750}}
+:root[data-theme="dark"]{--bg:#0e1020;--card:#171a2e;--ink:#eceefe;--mut:#9aa0c0;--line:#2a2e4a;--chip:#232750}
+*{box-sizing:border-box}body{margin:0;font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:linear-gradient(120deg,var(--pri),var(--pri2));color:#fff;padding:18px 16px}
+.wrap{max-width:1100px;margin:0 auto;padding:0 16px}
+header .wrap{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:0}
+h1{margin:0;font-size:22px}header small{opacity:.85}
+select,button{font:inherit;border-radius:10px;border:1px solid var(--line);padding:8px 12px;background:var(--card);color:var(--ink)}
+button{cursor:pointer;background:var(--pri);color:#fff;border:0}button.ghost{background:var(--chip);color:var(--ink)}
+button:disabled{opacity:.45;cursor:not-allowed}
+nav{display:flex;gap:6px;overflow-x:auto;padding:12px 0}
+nav button{background:transparent;color:var(--mut);white-space:nowrap}nav button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 3px #0002}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+.card h3{margin:0 0 6px;font-size:16px}.mut{color:var(--mut);font-size:13px}
+.stat{font-size:28px;font-weight:700}.bar{height:10px;background:var(--chip);border-radius:6px;overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--pri),var(--pri2))}
+.chip{display:inline-block;background:var(--chip);border-radius:999px;padding:2px 10px;font-size:12px;margin:2px 4px 2px 0}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+table{width:100%;border-collapse:collapse}td,th{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left;font-size:14px}
+.lvl-high{color:var(--bad);font-weight:700}.lvl-medium{color:var(--warn);font-weight:700}.lvl-low{color:var(--ok);font-weight:700}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;opacity:0;transition:.3s;pointer-events:none;max-width:90vw}
+#toast.show{opacity:1}
+section{display:none;padding-bottom:40px}section.on{display:block}
+.score{font-size:12px;color:var(--mut)}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <div><h1>YouthQuest AI</h1><small>Level up your life by levelling up your community</small></div>
+  <label>Signed in as <select id="who"></select></label>
+</div></header>
+<div class="wrap">
+<nav id="tabs">
+  <button data-t="home" class="on">My Journey</button>
+  <button data-t="quests">AI Quests</button>
+  <button data-t="board">Leaderboard</button>
+  <button data-t="rewards">Rewards</button>
+  <button data-t="mentor">Mentor Early-Warning</button>
+</nav>
+<section id="home" class="on"></section>
+<section id="quests"></section>
+<section id="board"></section>
+<section id="rewards"></section>
+<section id="mentor"></section>
+</div>
+<div id="toast"></div>
+<script>
+// ---- Mirror of backend/engine.py so the demo runs with no server ----
+const CATS=["environment","education","health","community","tech","sports","faith","arts"];
+const DAY=Math.floor(Date.now()/864e5);
+const QUESTS=[
+["q1","Beach clean-up at Santubong","environment","Kuching",120,["teamwork","logistics"],"Green Sarawak"],
+["q2","Tutor primary kids in Maths","education","Kuching",150,["teaching","communication"],"Cendekia"],
+["q3","Blood donation drive volunteer","health","Kuala Lumpur",100,["first-aid","communication"],"MRC"],
+["q4","Food bank packing night","community","Kuching",90,["teamwork"],"Food Aid MY"],
+["q5","Build a website for a local NGO","tech","Remote",250,["coding","design"],"Code4Good"],
+["q6","Coach futsal for at-risk teens","sports","Shah Alam",180,["leadership","coaching"],"Sukan Komuniti"],
+["q7","Mosque community iftar crew","faith","Kuching",110,["logistics","teamwork"],"HQ Mela Ju"],
+["q8","Mural painting for a rural school","arts","Bako",160,["design","teamwork"],"Art Reach"],
+["q9","Mangrove planting","environment","Bako",140,["field-work"],"Green Sarawak"],
+["q10","Digital literacy class for seniors","tech","Kuching",130,["teaching","coding"],"Code4Good"],
+["q11","Anti-vape peer ambassador training","health","Kuching",200,["public-speaking","leadership"],"Youth Health"],
+["q12","Flood relief response team","community","Kuala Lumpur",220,["first-aid","logistics"],"MERCY"]
+].map(([id,title,category,location,xp,skills,org])=>({id,title,category,location,xp,skills,org}));
+const QM=Object.fromEntries(QUESTS.map(q=>[q.id,q]));
+const REWARDS=[["r1","RM10 e-wallet voucher",300,"Partner Bank",500],["r2","Monthly transit pass",600,"Rapid Transit",200],
+["r3","Free online certification course",800,"Learning partner",150],["r4","Internship interview fast-track",1500,"Tech Corp CSR",40],
+["r5","Scholarship application points",3000,"Youth Foundation",10],["r6","Futsal court 2-hour booking",250,"Sukan Komuniti",100]]
+.map(([id,title,cost,partner,stock])=>({id,title,cost,partner,stock}));
+const LEVELS=[[0,"Seedling"],[200,"Sprout"],[500,"Changemaker"],[1000,"Trailblazer"],[2000,"Champion"],[4000,"Legend"]];
+// seeded RNG for synthetic youths (no real personal data)
+let s=7;const rnd=()=>(s=(s*16807)%2147483647)/2147483647;
+const pick=(a,n)=>{const c=[...a],o=[];while(n--&&c.length)o.push(c.splice(Math.floor(rnd()*c.length),1)[0]);return o};
+const NAMES=["Aisyah","Daniel","Mei Ling","Arjun","Hafiz","Nurul","Jason","Siti","Kumar","Farah","Iskandar","Lina","Adam","Priya","Zul"];
+const LOCS=["Kuching","Kuala Lumpur","Shah Alam","Bako"];
+const ledger=[];const seen=new Set();
+const credit=(y,a,r,k)=>{if(seen.has(k))return null;seen.add(k);const e={y,a,r,k};ledger.push(e);return e};
+const bal=y=>ledger.filter(e=>e.y===y).reduce((t,e)=>t+e.a,0);
+const earned=y=>ledger.filter(e=>e.y===y&&e.a>0).reduce((t,e)=>t+e.a,0);
+const YOUTHS=NAMES.map((n,i)=>{const interests=Object.fromEntries(CATS.map(c=>[c,+(rnd()**2).toFixed(2)]));
+ const history=pick(QUESTS.map(q=>q.id),Math.floor(rnd()*7));let days=[...new Set(Array.from({length:2+Math.floor(rnd()*24)},()=>DAY-Math.floor(rnd()*60)))].sort();
+ if(i%5===4)days=days.map(d=>d-25);
+ const y={id:"y"+(i+1),name:n,location:LOCS[Math.floor(rnd()*4)],interests,skills:pick(["teamwork","coding","teaching","design","first-aid"],2),history,days};
+ history.forEach(h=>credit(y.id,QM[h].xp,"quest:"+h,y.id+":"+h));return y});
+const YM=Object.fromEntries(YOUTHS.map(y=>[y.id,y]));
+const cos=(a,b)=>{let d=0,na=0,nb=0;CATS.forEach(k=>{d+=(a[k]||0)*(b[k]||0);na+=(a[k]||0)**2;nb+=(b[k]||0)**2});return d/((Math.sqrt(na)||1)*(Math.sqrt(nb)||1))};
+function score(y,q){const interest=y.interests[q.category]||0;const nw=q.skills.filter(s=>!y.skills.includes(s));const skill=q.skills.length?nw.length/q.skills.length:0;
+ const local=q.location===y.location?1:.3;const peers=YOUTHS.filter(p=>p.id!==y.id&&cos(p.interests,y.interests)>.7);
+ const peer=peers.length?peers.filter(p=>p.history.includes(q.id)).length/peers.length:0;const dc=y.history.map(h=>QM[h].category);
+ const novel=dc.length?1-dc.filter(c=>c===q.category).length/dc.length:1;
+ return{total:.4*interest+.2*skill+.15*local+.15*peer+.1*novel,interest,skill,local,peer,novel}}
+function why(s,q){const r=[];if(s.interest>=.6)r.push("matches your interest in "+q.category);if(s.skill>=.5)r.push("builds new skills");if(s.local===1)r.push("near you");if(s.peer>=.3)r.push("popular with youths like you");return r.join(", ")||"helps you explore something new"}
+function level(xp){let c=LEVELS[0],n=null;LEVELS.forEach((l,i)=>{if(xp>=l[0]){c=l;n=LEVELS[i+1]||null}});return{name:c[1],base:c[0],next:n}}
+function streak(days){const d=[...new Set(days)].sort((a,b)=>b-a);let s=0;for(let i=0;i<d.length;i++){if(i===0||d[i-1]-d[i]===1)s++;else break}return d[0]>=DAY-1?s:0}
+function badges(y){const c=y.history.map(h=>QM[h].category),o=[];if(c.length)o.push("🌱 First Step");if(c.length>=5)o.push("🔥 Committed 5");if(new Set(c).size>=4)o.push("🧭 All-Rounder");if(c.filter(x=>x==="environment").length>=3)o.push("🌳 Green Guardian");if(streak(y.days)>=7)o.push("⚡ 7-Day Streak");return o}
+function risk(y){const d=[...y.days].sort((a,b)=>a-b);const inactive=d.length?DAY-d[d.length-1]:60;const l30=d.filter(x=>DAY-x<30).length,p30=d.filter(x=>DAY-x>=30&&DAY-x<60).length;
+ const drop=p30?Math.max(0,(p30-l30)/p30):0;const sb=inactive>7&&p30>0?1:0;const div=Object.values(y.interests).filter(v=>v>.4).length;
+ const f={days_inactive:Math.min(inactive,60),streak_broken:sb,activity_drop:+drop.toFixed(2),low_diversity:div<=1?1:0};
+ const z=-1.2+.12*f.days_inactive+.9*f.streak_broken+1.6*f.activity_drop+.5*f.low_diversity;const p=1/(1+Math.exp(-z));
+ const lv=p>=.7?"high":p>=.4?"medium":"low";return{p,lv,f,action:{high:"Alert mentor for a personal check-in within 48h",medium:"Send personalised quest nudge + team invite",low:"Keep going"}[lv]}}
+// ---- UI ----
+let me="y11";const $=id=>document.getElementById(id);
+const toast=m=>{const t=$("toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2600)};
+$("who").innerHTML=YOUTHS.map(y=>`<option value="${y.id}" ${y.id===me?"selected":""}>${y.name} (${y.location})</option>`).join("");
+$("who").onchange=e=>{me=e.target.value;render()};
+document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>{document.querySelectorAll("#tabs button,section").forEach(x=>x.classList.remove("on"));b.classList.add("on");$(b.dataset.t).classList.add("on")});
+function checkin(qid){const y=YM[me],q=QM[qid];const before=level(earned(me)).name;
+ if(!credit(me,q.xp,"quest:"+qid,me+":"+qid))return toast("Already checked in");y.history.push(qid);if(!y.days.includes(DAY))y.days.push(DAY);
+ const after=level(earned(me)).name;toast(`✅ QR verified · +${q.xp} XP`+(after!==before?` · Level up: ${after}!`:""));render()}
+function redeem(rid){const r=REWARDS.find(x=>x.id===rid);if(bal(me)<r.cost)return toast("Not enough points yet");
+ credit(me,-r.cost,"reward:"+rid,me+":"+rid+":"+Date.now());r.stock--;toast(`🎁 Redeemed! Voucher code YQ-${Math.random().toString(36).slice(2,10).toUpperCase()}`);render()}
+function render(){const y=YM[me],xp=earned(me),L=level(xp),pct=L.next?Math.round((xp-L.base)/(L.next[0]-L.base)*100):100;
+ const top=Object.entries(y.interests).sort((a,b)=>b[1]-a[1]).slice(0,3);
+ const rank=YOUTHS.map(u=>({id:u.id,xp:earned(u.id)})).sort((a,b)=>b.xp-a.xp).findIndex(r=>r.id===me)+1;
+ $("home").innerHTML=`<div class="grid">
+ <div class="card"><div class="mut">Level</div><div class="stat">${L.name}</div><div class="bar"><i style="width:${pct}%"></i></div>
+  <div class="mut">${xp} XP${L.next?` · ${L.next[0]-xp} XP to ${L.next[1]}`:" · max level"}</div></div>
+ <div class="card"><div class="mut">Reward points</div><div class="stat">${bal(me)}</div><div class="mut">Redeemable for real-life rewards</div></div>
+ <div class="card"><div class="mut">National rank</div><div class="stat">#${rank} <span class="mut">of ${YOUTHS.length}</span></div><div class="mut">Streak: ${streak(y.days)} day(s)</div></div>
+ <div class="card"><h3>Badges</h3>${badges(y).map(b=>`<span class="chip">${b}</span>`).join("")||'<span class="mut">Complete a quest to earn your first badge</span>'}</div>
+ <div class="card"><h3>AI profile</h3><div class="mut">Top interests</div>${top.map(([c,v])=>`<span class="chip">${c} ${Math.round(v*100)}%</span>`).join("")}<div class="mut" style="margin-top:6px">Skills</div>${y.skills.map(s=>`<span class="chip">${s}</span>`).join("")}</div>
+ <div class="card"><h3>Impact so far</h3><div class="stat">${y.history.length}</div><div class="mut">quests completed · ${y.history.length*3} est. volunteer hours</div></div></div>`;
+ const rec=QUESTS.filter(q=>!y.history.includes(q.id)).map(q=>({q,s:score(y,q)})).sort((a,b)=>b.s.total-a.s.total);
+ $("quests").innerHTML=`<p class="mut">Ranked for ${y.name} by the hybrid recommender (interest 40% · new skills 20% · locality 15% · peers 15% · novelty 10%).</p><div class="grid">${rec.map(({q,s},i)=>`
+ <div class="card"><div class="row"><span class="chip">${q.category}</span><b>+${q.xp} XP</b></div><h3>${i<3?"⭐ ":""}${q.title}</h3>
+ <div class="mut">${q.org} · ${q.location}</div><p style="margin:8px 0">Why: ${why(s,q)}</p><div class="score">match score ${(s.total*100).toFixed(0)}%</div>
+ <button style="margin-top:10px" onclick="checkin('${q.id}')">Scan QR &amp; check in</button></div>`).join("")}</div>`;
+ const rows=YOUTHS.map(u=>({u,xp:earned(u.id)})).sort((a,b)=>b.xp-a.xp);
+ const locs=["All",...LOCS];const cur=window.bf||"All";
+ $("board").innerHTML=`<div class="card"><div class="row"><h3>Leaderboard</h3><select onchange="window.bf=this.value;render()">${locs.map(l=>`<option ${l===cur?"selected":""}>${l}</option>`).join("")}</select></div>
+ <table><tr><th>#</th><th>Youth</th><th>Location</th><th>Level</th><th>XP</th></tr>${rows.filter(r=>cur==="All"||r.u.location===cur).map((r,i)=>`<tr ${r.u.id===me?'style="background:var(--chip)"':""}><td>${["🥇","🥈","🥉"][i]||i+1}</td><td>${r.u.name}</td><td>${r.u.location}</td><td>${level(r.xp).name}</td><td><b>${r.xp}</b></td></tr>`).join("")}</table></div>`;
+ $("rewards").innerHTML=`<p class="mut">You have <b>${bal(me)}</b> points. Rewards are funded by CSR partners; every redemption is an atomic, double-spend-safe ledger transaction.</p><div class="grid">${REWARDS.map(r=>`
+ <div class="card"><h3>${r.title}</h3><div class="mut">${r.partner} · ${r.stock} left</div><div class="row" style="margin-top:10px"><b>${r.cost} pts</b><button ${bal(me)<r.cost||r.stock<1?"disabled":""} onclick="redeem('${r.id}')">Redeem</button></div></div>`).join("")}</div>`;
+ const rk=YOUTHS.map(u=>({u,...risk(u)})).sort((a,b)=>b.p-a.p);
+ $("mentor").innerHTML=`<p class="mut">Real-time early-warning model flags youths whose engagement is dropping so mentors can step in before they drift toward social problems. Production scoring runs in-transaction on the IBM Z Telum AI accelerator.</p>
+ <div class="grid" style="margin-bottom:14px"><div class="card"><div class="mut">High risk</div><div class="stat lvl-high">${rk.filter(r=>r.lv==="high").length}</div></div><div class="card"><div class="mut">Medium risk</div><div class="stat lvl-medium">${rk.filter(r=>r.lv==="medium").length}</div></div><div class="card"><div class="mut">Engaged</div><div class="stat lvl-low">${rk.filter(r=>r.lv==="low").length}</div></div></div>
+ <div class="card" style="overflow-x:auto"><table><tr><th>Youth</th><th>Risk</th><th>Days inactive</th><th>Activity drop</th><th>Suggested action</th></tr>${rk.map(r=>`<tr><td>${r.u.name}</td><td class="lvl-${r.lv}">${Math.round(r.p*100)}% ${r.lv}</td><td>${r.f.days_inactive}</td><td>${Math.round(r.f.activity_drop*100)}%</td><td>${r.action}</td></tr>`).join("")}</table></div>`;
+}
+render();
+</script>
+</body>
+</html>
